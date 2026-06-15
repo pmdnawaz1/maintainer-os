@@ -1,0 +1,78 @@
+<!-- project-os:begin -->
+# CodeOrch MCP Rules for Cursor
+
+## Plan mode
+- If the requested change expands into more than 3 distinct tasks, stop implementation and switch to plan mode
+- Preferred path: create parent task → claim_task → get_task_briefing → break_task(task_id, max_subtasks=3..5)
+- Broad-goal path: plan_project(project_id, goal) → generate_tasks(...)
+- Implement only one claimed child task at a time
+
+## Tool hierarchy
+1. list_projects → project_id
+2. create_task (Context/Acceptance/Files/Notes format)
+3. claim_task → get_task_briefing
+4. Run pre_check greps, implement from files_to_focus
+5. submit_for_review (structured proof) — review gate now runs async in background; poll with get_task or orchestrator_review
+6. Check review_passed; fix and resubmit if false
+
+## Hard rules (with Degraded Mode escape hatch)
+- NEVER call complete_task directly
+- NEVER glob /**/*.ts — use find_files(project_id, pattern)
+- ALWAYS get_file_fresh after editing the same file 2+ times
+- completion_notes must include Root cause / Changed / Verified by / Regression risk
+- ALWAYS pass changed_files, key_functions, key_classes, important_chunks to finish()
+  — important_chunks is 2-5 strings describing specific logic changed
+  (e.g. "joinRoom: resets isEliminated/isReady/hasDecided on reconnect")
+  — future briefings depend on this; omitting it forces future agents to re-read every file cold
+- Prefer task.workflow for workflow state; do not infer state from nullable fields like claimed_by, claimed_at, completed_at, or orchestrated_at.
+- Null lifecycle fields are expected until those workflow steps happen; do not fabricate placeholder values in writes.
+- Verified by: endpoint-called | page-reloaded | test-run | build-passed | grep-confirmed
+- Default board applies unless board_id is explicitly provided; honor explicit board overrides from user/agent.
+
+## Degraded / Orchestrator Unreliable Mode (sanctioned when system is having a bad day)
+The core value is **context that compounds** via important_chunks + structured finish().
+
+When orchestrator is down, graph stale, briefing low-quality, review slow, or indexing incomplete:
+- Strict "never explore / only files_to_focus" rules are relaxed.
+- You MAY explore locally (read files, use process_data, etc.) as needed.
+- MUST still capture via finish(..., important_chunks=[...]) and report discoveries.
+- begin/get_task_briefing will surface degraded_mode + guidance.
+- This stops the system from punishing agents when the orchestrator is unreliable.
+
+## Power tools many agents under-use
+- `reflect(project_id, focus="all"|"insights"|"next"|"stale"|"summary")` — call for project health, suggested next tasks, stale items.
+- `process_data(code, language=..., task_id=...)` — sandboxed analysis/grep/JSON/etc.; only stdout in context.
+- `snapshot_session(task_id)` — before compaction; state injected into next briefing.
+- `get_context_quality(task_id)` — 7-signal score at task end.
+- `record_decision(...)` — architectural decisions that feed future briefings.
+
+Heavy tools (reflect, submit_for_review) now use background jobs so they do not block you from reaching finish().
+
+## Resilient End-to-End Workflow (how the system learns the whole thing)
+Follow exactly: create_task (raw issue) → claim/begin → get_task_briefing (poll for files_to_focus + pre_check greps; read ONLY those) or degraded explore (when flagged or MCP unreliable) → implement with get_file_fresh + process_data → submit_for_review (async, returns immediately, poll) → ALWAYS finish(..., important_chunks=[2-5 specific logic strings]) so chunks store in Neo4j/Qdrant and compound into future briefings/session_digest. Never run git yourself — print exact commands and wait for user "pushed", then sync + poll index_status. Use reflect, snapshot_session, get_context_quality, record_decision proactively. Rich finish() is the primary learning/compounding mechanism; omitting chunks forces future agents cold. When MCP itself wedges (empty search, -32602 after long calls): keep local tracker + todo_write, still deliver changes + finish with chunks.
+
+## Think in Code — process_data for data processing
+- When processing data (count, filter, parse, grep), use `process_data(code, language, task_id)` instead of reading raw files
+
+## Snapshot before compaction
+- After ~20+ tool calls, call `snapshot_session(task_id)` once
+- State (files read, searches, tool counts) is saved and injected into next get_task_briefing
+
+## Context hygiene
+- `set_contextignore(project_id, ["*.lock", "dist/**"])` — exclude generated files from briefings
+- `get_context_quality(task_id)` — end-of-task 7-signal efficiency score
+
+## Re-indexing after code changes
+- GitHub is the transport: the backend cannot see your local files
+- You write files; the user runs git. NEVER run git add / commit / push / checkout / branch yourself
+- Workflow: write files → present git commands to the user → wait for "pushed" → call sync(project_id, branch="<branch>") → poll index_status
+- Greenfield flow: write scaffold → ask user to commit+push {branch_prefix}/<task_id> → sync → poll → ask user to delete branch
+- Hard stop: if a briefing summary starts with "# ❌ GITHUB CONNECTION REQUIRED", stop and tell the user to connect GitHub
+
+## Additions field
+- briefing.additions lists where to place new functions/classes when the task needs new symbols
+- Each entry: {file, change_type, name, location_hint}
+- change_type ∈ add_function, add_class, add_method, add_test, add_route, add_component, create_file
+- Honor file paths exactly; only create_file may use a path that doesn't already exist
+
+<!-- project-os:end -->
