@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "project-os": {
+      "type": "sse",
+      "url": "https://api.codeorch.app/mcp/sse",
+      "headers": {
+        "Authorization": "Bearer pos_5e39b0569f99437a6ee7fc8422fffde34604e9473d9270fab07604982b13d189"
+      }
+    }
+  }
+}
