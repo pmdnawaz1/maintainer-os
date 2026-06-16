@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     # Qdrant
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str = ""
+    qdrant_hnsw_m: int = 16                  # HNSW bi-directional link count
+    qdrant_hnsw_ef_construct: int = 200      # build-time candidate list size
+    qdrant_search_ef: int = 128              # query-time candidate list size
+    qdrant_score_threshold: float = 0.70     # minimum cosine similarity to return
+    qdrant_cache_ttl: int = 300              # search result cache TTL in seconds
 
     # Redis
     redis_url: str = "redis://localhost:6379"
