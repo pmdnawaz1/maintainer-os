@@ -39,36 +39,31 @@ async def github_webhook(
 
     log.info("github_webhook_received", event=x_github_event, action=action)
 
-    # Dispatch to background task queue (Celery)
-    if x_github_event == "issues":
+    if x_github_event == "issues" and action == "opened":
         _enqueue_triage(body)
-    elif x_github_event == "pull_request":
+    elif x_github_event == "pull_request" and action == "opened":
         _enqueue_review(body)
 
     return {"status": "accepted"}
 
 
-@router.post("/github")
-async def github_webhook_push(
-    request: Request,
-    x_github_event: str = Header(...),
-    x_hub_signature_256: str | None = Header(None),
-) -> dict[str, str]:
-    """Alias kept for push events — same handler, separate route not needed."""
-    return await github_webhook(request, x_github_event, x_hub_signature_256)
-
-
 def _enqueue_triage(payload: dict) -> None:
+    from app.tasks.triage import run_triage
+
     installation_id: int = payload.get("installation", {}).get("id", 0)
     repo: str = payload.get("repository", {}).get("full_name", "")
     issue_number: int = payload.get("issue", {}).get("number", 0)
+
+    run_triage.delay(installation_id, repo, issue_number)
     log.info("enqueue_triage", installation_id=installation_id, repo=repo, issue=issue_number)
-    # Celery task: from app.tasks.triage import run_triage; run_triage.delay(installation_id, repo, issue_number)
 
 
 def _enqueue_review(payload: dict) -> None:
+    from app.tasks.review import run_review
+
     installation_id: int = payload.get("installation", {}).get("id", 0)
     repo: str = payload.get("repository", {}).get("full_name", "")
     pr_number: int = payload.get("pull_request", {}).get("number", 0)
+
+    run_review.delay(installation_id, repo, pr_number)
     log.info("enqueue_review", installation_id=installation_id, repo=repo, pr=pr_number)
-    # Celery task: from app.tasks.review import run_review; run_review.delay(installation_id, repo, pr_number)
