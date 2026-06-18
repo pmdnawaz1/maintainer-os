@@ -2,6 +2,16 @@ import { tool } from "@langchain/core/tools";
 import neo4j, { Driver } from "neo4j-driver";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { z } from "zod";
+import type { Issue, PullRequest, Repository } from "@maintainer-os/types";
+
+type MemoryPayload = {
+  content: string;
+  type: string;
+  tags: string[];
+  issue?: Pick<Issue, "id" | "github_number" | "title" | "status">;
+  pull_request?: Pick<PullRequest, "id" | "github_number" | "title" | "status">;
+  repository?: Pick<Repository, "full_name">;
+};
 
 const COLLECTION = "maintainer_memory";
 const VECTOR_SIZE = 1536;
@@ -73,8 +83,9 @@ export function createMemoryTools(neo4jDriver: Driver, qdrant: QdrantClient, emb
       const pointId = Math.abs(
         Array.from(content).reduce((h, c) => (Math.imul(31, h) + c.charCodeAt(0)) | 0, 0)
       );
+      const payload: MemoryPayload = { content, type, tags };
       await qdrant.upsert(COLLECTION, {
-        points: [{ id: pointId, vector, payload: { content, type, tags } }],
+        points: [{ id: pointId, vector, payload }],
       });
 
       return `Memory stored — Neo4j node created, Qdrant point ${pointId} upserted`;
