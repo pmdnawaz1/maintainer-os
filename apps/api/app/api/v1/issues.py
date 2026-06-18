@@ -11,8 +11,14 @@ router = APIRouter()
 @router.get("/")
 async def list_issues(
     repository_id: int | None = None,
+    q: str | None = None,
+    search_type: str = "hybrid",
     db: AsyncSession = Depends(get_db),
 ) -> list[dict]:
+    if q:
+        from app.core.memory import hybrid_search_issues
+        return await hybrid_search_issues(db, q, limit=50, search_type=search_type)
+
     query = select(Issue).order_by(Issue.created_at.desc())
     if repository_id is not None:
         query = query.where(Issue.repository_id == repository_id)

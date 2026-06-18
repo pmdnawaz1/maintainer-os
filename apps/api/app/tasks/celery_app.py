@@ -23,5 +23,57 @@ celery_app.conf.update(
     task_routes={
         "app.tasks.triage.*": {"queue": "triage"},
         "app.tasks.review.*": {"queue": "review"},
+        "app.tasks.celery_app.*": {"queue": "embeddings"},
     },
 )
+
+
+@celery_app.task(
+    name="app.tasks.celery_app.generate_embedding_for_item",
+    bind=True,
+    max_retries=3,
+    default_retry_delay=30,
+)
+def generate_embedding_for_item(self, item_id: int, item_type: str) -> None:
+    """Generate and store a 1536-dim embedding for an Issue or PullRequest."""
+    import asyncio
+    try:
+        asyncio.run(_async_generate_embedding(item_id, item_type))
+    except Exception as exc:
+        raise self.retry(exc=exc)
+
+
+async def _async_generate_embedding(item_id: int, item_type: str) -> None:
+    import openai
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+    from sqlalchemy.orm import sessionmaker
+    from app.db.models import Issue, PullRequest
+
+    engine = create_async_engine(settings.database_url)
+    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
+
+    try:
+        async with async_session() as db:
+            if item_type == "issue":
+                result = await db.execute(select(Issue).where(Issue.id == item_id))
+                item = result.scalar_one_or_none()
+            elif item_type == "pull_request":
+                result = await db.execute(select(PullRequest).where(PullRequest.id == item_id))
+                item = result.scalar_one_or_none()
+            else:
+                return
+
+            if not item:
+                return
+
+            text = f"{item.title}\n{item.body or ''}"
+            response = await client.embeddings.create(
+                model="text-embedding-3-small",
+                input=text,
+            )
+            item.embedding = response.data[0].embedding
+            await db.commit()
+    finally:
+        await engine.dispose()

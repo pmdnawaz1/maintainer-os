@@ -3,7 +3,7 @@
   "mcp": {
     "project_os": {
       "type": "remote",
-      "url": "https://api.codeorch.app/mcp/sse?token=pos_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      "url": "https://api.codeorch.app/mcp/sse?token=pos_5e39b0569f99437a6ee7fc8422fffde34604e9473d9270fab07604982b13d189"
     }
   }
 }

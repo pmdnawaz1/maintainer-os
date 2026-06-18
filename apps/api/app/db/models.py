@@ -3,6 +3,7 @@
 from datetime import datetime
 from enum import Enum
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -51,6 +52,7 @@ class Issue(Base):
     status: Mapped[IssueStatus] = mapped_column(String(50), default=IssueStatus.open)
     triage_label: Mapped[str | None] = mapped_column(String(100), nullable=True)
     ai_response: Mapped[str | None] = mapped_column(Text, nullable=True)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -67,6 +69,7 @@ class PullRequest(Base):
     body: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[PRStatus] = mapped_column(String(50), default=PRStatus.open)
     review_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
