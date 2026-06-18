@@ -44,6 +44,17 @@ async function request<T>(
   return res.json() as Promise<T>;
 }
 
+// Integration gap: /api/v1/memory/* endpoints are not yet implemented on the backend.
+// These helpers define the expected contract so the frontend is ready when they land.
+export const memory = {
+  search: (q: string, limit = 5) =>
+    api.get<Array<{ id: string; score: number; payload: Record<string, unknown> }>>(
+      `/api/v1/memory/search?q=${encodeURIComponent(q)}&limit=${limit}`,
+    ),
+  store: (content: string, type: string, vector: number[], tags: string[] = []) =>
+    api.post<{ id: string }>("/api/v1/memory/store", { content, type, vector, tags }),
+};
+
 export const api = {
   get: <T>(path: string, headers?: HeadersInit) =>
     request<T>(path, { headers }),

@@ -1,5 +1,6 @@
 import { ChatAnthropic } from "@langchain/anthropic";
 import { StateGraph, END } from "@langchain/langgraph";
+import type { RunnableConfig } from "@langchain/core/runnables";
 import { TriageState, TriageStateType } from "../state";
 
 const TRIAGE_LABELS = ["bug", "feature", "documentation", "question", "duplicate", "security", "wontfix"];
@@ -22,9 +23,25 @@ Respond in JSON:
   "response": "<your response to the author>"
 }`;
 
-async function fetchMemoryNode(state: TriageStateType): Promise<Partial<TriageStateType>> {
-  // Memory tools injected at runtime via graph config
-  return { memoryContext: null };
+async function fetchMemoryNode(
+  state: TriageStateType,
+  config?: RunnableConfig,
+): Promise<Partial<TriageStateType>> {
+  const searchMemory = config?.configurable?.searchMemory as
+    | ((args: { query: string; limit: number }) => Promise<string>)
+    | undefined;
+
+  if (!searchMemory) return { memoryContext: null };
+
+  try {
+    const query = `${state.issueTitle}\n${state.issueBody ?? ""}`.slice(0, 500);
+    const raw = await searchMemory({ query, limit: 3 });
+    const results = JSON.parse(raw) as Array<{ payload: { content: string } }>;
+    const context = results.map((r) => r.payload.content).filter(Boolean).join("\n\n");
+    return { memoryContext: context || null };
+  } catch {
+    return { memoryContext: null };
+  }
 }
 
 async function classifyNode(state: TriageStateType): Promise<Partial<TriageStateType>> {
