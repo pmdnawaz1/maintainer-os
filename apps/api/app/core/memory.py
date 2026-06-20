@@ -407,3 +407,175 @@ async def upsert_memory(
         ],
     )
     return str(point_id)
+
+
+# ─── Postgres pgvector: hybrid search ────────────────────────────────────────
+
+async def hybrid_search_issues(
+    db: Any,  # AsyncSession — imported lazily to avoid circular dep
+    query: str,
+    query_vector: list[float] | None = None,
+    limit: int = 10,
+    search_type: str = "hybrid",
+) -> list[dict[str, Any]]:
+    """Search Issues by keyword, semantic (pgvector), or hybrid (RRF) strategy."""
+    from sqlalchemy import func, select
+    from app.db.models import Issue
+
+    if search_type == "keyword" or query_vector is None:
+        tsq = func.plainto_tsquery("english", query)
+        tsv = func.to_tsvector("english", func.concat(Issue.title, " ", func.coalesce(Issue.body, "")))
+        stmt = (
+            select(Issue)
+            .where(tsv.op("@@")(tsq))
+            .order_by(func.ts_rank(tsv, tsq).desc())
+            .limit(limit)
+        )
+        result = await db.execute(stmt)
+        issues = result.scalars().all()
+
+    elif search_type == "semantic":
+        _validate_vector(query_vector)
+        stmt = (
+            select(Issue)
+            .where(Issue.embedding.is_not(None))
+            .order_by(Issue.embedding.cosine_distance(query_vector))
+            .limit(limit)
+        )
+        result = await db.execute(stmt)
+        issues = result.scalars().all()
+
+    else:  # hybrid: Reciprocal Rank Fusion of semantic + keyword results
+        _validate_vector(query_vector)
+        sem_stmt = (
+            select(Issue)
+            .where(Issue.embedding.is_not(None))
+            .order_by(Issue.embedding.cosine_distance(query_vector))
+            .limit(limit)
+        )
+        tsq = func.plainto_tsquery("english", query)
+        tsv = func.to_tsvector("english", func.concat(Issue.title, " ", func.coalesce(Issue.body, "")))
+        kw_stmt = (
+            select(Issue)
+            .where(tsv.op("@@")(tsq))
+            .order_by(func.ts_rank(tsv, tsq).desc())
+            .limit(limit)
+        )
+        sem_result = await db.execute(sem_stmt)
+        kw_result = await db.execute(kw_stmt)
+
+        rrf_k = 60
+        scores: dict[int, float] = {}
+        items: dict[int, Any] = {}
+        for rank, item in enumerate(sem_result.scalars().all()):
+            scores[item.id] = scores.get(item.id, 0.0) + 1.0 / (rrf_k + rank + 1)
+            items[item.id] = item
+        for rank, item in enumerate(kw_result.scalars().all()):
+            scores[item.id] = scores.get(item.id, 0.0) + 1.0 / (rrf_k + rank + 1)
+            items[item.id] = item
+
+        sorted_ids = sorted(scores, key=lambda x: scores[x], reverse=True)[:limit]
+        return [
+            {
+                "id": items[i].id,
+                "github_number": items[i].github_number,
+                "title": items[i].title,
+                "status": items[i].status,
+            }
+            for i in sorted_ids
+        ]
+
+    return [
+        {
+            "id": i.id,
+            "github_number": i.github_number,
+            "title": i.title,
+            "status": i.status,
+        }
+        for i in issues
+    ]
+
+
+async def hybrid_search_pull_requests(
+    db: Any,  # AsyncSession — imported lazily to avoid circular dep
+    query: str,
+    query_vector: list[float] | None = None,
+    limit: int = 10,
+    search_type: str = "hybrid",
+) -> list[dict[str, Any]]:
+    """Search PullRequests by keyword, semantic (pgvector), or hybrid (RRF) strategy."""
+    from sqlalchemy import func, select
+    from app.db.models import PullRequest
+
+    if search_type == "keyword" or query_vector is None:
+        tsq = func.plainto_tsquery("english", query)
+        tsv = func.to_tsvector("english", func.concat(PullRequest.title, " ", func.coalesce(PullRequest.body, "")))
+        stmt = (
+            select(PullRequest)
+            .where(tsv.op("@@")(tsq))
+            .order_by(func.ts_rank(tsv, tsq).desc())
+            .limit(limit)
+        )
+        result = await db.execute(stmt)
+        prs = result.scalars().all()
+
+    elif search_type == "semantic":
+        _validate_vector(query_vector)
+        stmt = (
+            select(PullRequest)
+            .where(PullRequest.embedding.is_not(None))
+            .order_by(PullRequest.embedding.cosine_distance(query_vector))
+            .limit(limit)
+        )
+        result = await db.execute(stmt)
+        prs = result.scalars().all()
+
+    else:  # hybrid: Reciprocal Rank Fusion of semantic + keyword results
+        _validate_vector(query_vector)
+        sem_stmt = (
+            select(PullRequest)
+            .where(PullRequest.embedding.is_not(None))
+            .order_by(PullRequest.embedding.cosine_distance(query_vector))
+            .limit(limit)
+        )
+        tsq = func.plainto_tsquery("english", query)
+        tsv = func.to_tsvector("english", func.concat(PullRequest.title, " ", func.coalesce(PullRequest.body, "")))
+        kw_stmt = (
+            select(PullRequest)
+            .where(tsv.op("@@")(tsq))
+            .order_by(func.ts_rank(tsv, tsq).desc())
+            .limit(limit)
+        )
+        sem_result = await db.execute(sem_stmt)
+        kw_result = await db.execute(kw_stmt)
+
+        rrf_k = 60
+        scores: dict[int, float] = {}
+        items: dict[int, Any] = {}
+        for rank, item in enumerate(sem_result.scalars().all()):
+            scores[item.id] = scores.get(item.id, 0.0) + 1.0 / (rrf_k + rank + 1)
+            items[item.id] = item
+        for rank, item in enumerate(kw_result.scalars().all()):
+            scores[item.id] = scores.get(item.id, 0.0) + 1.0 / (rrf_k + rank + 1)
+            items[item.id] = item
+
+        sorted_ids = sorted(scores, key=lambda x: scores[x], reverse=True)[:limit]
+        return [
+            {
+                "id": items[i].id,
+                "github_number": items[i].github_number,
+                "title": items[i].title,
+                "status": items[i].status,
+            }
+            for i in sorted_ids
+        ]
+
+    return [
+        {
+            "id": pr.id,
+            "github_number": pr.github_number,
+            "title": pr.title,
+            "status": pr.status,
+        }
+        for pr in prs
+    ]

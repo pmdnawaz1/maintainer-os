@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@maintainer-os/agents"],
+  transpilePackages: ["@maintainer-os/agents", "@maintainer-os/types"],
   images: {
     remotePatterns: [
       { hostname: "avatars.githubusercontent.com" },

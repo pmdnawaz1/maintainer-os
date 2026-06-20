@@ -14,7 +14,9 @@ export async function getCheckpointer(): Promise<PostgresSaver> {
   const dbUrl = process.env.DATABASE_URL;
   if (!dbUrl) throw new Error("DATABASE_URL env var required for checkpointer");
 
-  _checkpointer = PostgresSaver.fromConnString(dbUrl);
+  // Strip SQLAlchemy driver prefix (e.g. postgresql+asyncpg://) → postgresql://
+  const pgUrl = dbUrl.replace(/^postgresql\+\w+:\/\//, "postgresql://");
+  _checkpointer = PostgresSaver.fromConnString(pgUrl);
   await _checkpointer.setup(); // creates langgraph_checkpoints table if absent
   return _checkpointer;
 }

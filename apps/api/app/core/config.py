@@ -6,7 +6,15 @@ class Settings(BaseSettings):
 
     environment: str = "development"
     secret_key: str = "change-me-in-production"
+    frontend_url: str = "http://localhost:3000"
     allowed_origins: list[str] = ["http://localhost:3000"]
+
+    @property
+    def cors_origins(self) -> list[str]:
+        origins = list(self.allowed_origins)
+        if self.frontend_url not in origins:
+            origins.append(self.frontend_url)
+        return origins
 
     # Database
     database_url: str = "postgresql+asyncpg://maintainer:maintainer_secret@localhost:5432/maintainer_os"

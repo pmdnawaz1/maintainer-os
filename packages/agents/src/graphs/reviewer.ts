@@ -1,5 +1,6 @@
 import { ChatAnthropic } from "@langchain/anthropic";
 import { StateGraph, END } from "@langchain/langgraph";
+import type { RunnableConfig } from "@langchain/core/runnables";
 import { ReviewState, ReviewStateType } from "../state";
 
 const REVIEW_PROMPT = (state: ReviewStateType) => `You are a senior software engineer reviewing a GitHub pull request.
@@ -28,8 +29,25 @@ Respond in JSON:
   "security_issues": ["<issue1>", "<issue2>"] // empty array if none
 }`;
 
-async function fetchMemoryNode(state: ReviewStateType): Promise<Partial<ReviewStateType>> {
-  return { memoryContext: null };
+async function fetchMemoryNode(
+  state: ReviewStateType,
+  config?: RunnableConfig,
+): Promise<Partial<ReviewStateType>> {
+  const searchMemory = config?.configurable?.searchMemory as
+    | ((args: { query: string; limit: number }) => Promise<string>)
+    | undefined;
+
+  if (!searchMemory) return { memoryContext: null };
+
+  try {
+    const query = `${state.prTitle}\n${state.prBody ?? ""}`.slice(0, 500);
+    const raw = await searchMemory({ query, limit: 5 });
+    const results = JSON.parse(raw) as Array<{ payload: { content: string } }>;
+    const context = results.map((r) => r.payload.content).filter(Boolean).join("\n\n");
+    return { memoryContext: context || null };
+  } catch {
+    return { memoryContext: null };
+  }
 }
 
 async function reviewNode(state: ReviewStateType): Promise<Partial<ReviewStateType>> {
