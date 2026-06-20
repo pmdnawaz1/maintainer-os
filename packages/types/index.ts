@@ -2,6 +2,8 @@ export * from "./repository";
 export * from "./issue";
 export * from "./pull_request";
 export * from "./dashboard";
+export * from "./report";
+export * from "./release";
 
 // Search
 export type SearchType = "hybrid" | "semantic" | "keyword";

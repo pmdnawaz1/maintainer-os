@@ -1,4 +1,6 @@
 from celery import Celery
+from celery.schedules import crontab
+
 from app.core.config import settings
 
 celery_app = Celery(
@@ -8,6 +10,8 @@ celery_app = Celery(
     include=[
         "app.tasks.triage",
         "app.tasks.review",
+        "app.tasks.reports",
+        "app.tasks.release_task",
     ],
 )
 
@@ -23,7 +27,16 @@ celery_app.conf.update(
     task_routes={
         "app.tasks.triage.*": {"queue": "triage"},
         "app.tasks.review.*": {"queue": "review"},
+        "app.tasks.reports.*": {"queue": "reports"},
+        "app.tasks.release_task.*": {"queue": "releases"},
         "app.tasks.celery_app.*": {"queue": "embeddings"},
+    },
+    beat_schedule={
+        # Every Monday at 09:00 UTC — generate health reports for all repos
+        "weekly-health-reports": {
+            "task": "app.tasks.reports.generate_weekly_reports_for_all_repos",
+            "schedule": crontab(day_of_week="monday", hour=9, minute=0),
+        },
     },
 )
 

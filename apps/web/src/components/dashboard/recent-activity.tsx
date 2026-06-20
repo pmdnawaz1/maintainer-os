@@ -1,9 +1,25 @@
 "use client";
 
+import { AlertCircle } from "lucide-react";
 import { useRecentActivity } from "@/lib/use-api-hooks";
+import { Skeleton } from "@/components/ui/skeleton";
+
+function ActivitySkeleton() {
+  return (
+    <ul className="divide-y">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <li key={i} className="flex items-center gap-3 px-6 py-3">
+          <Skeleton className="h-5 w-16 rounded-full shrink-0" />
+          <Skeleton className="h-4 flex-1" />
+          <Skeleton className="h-4 w-20 shrink-0" />
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export function RecentActivity() {
-  const { data: activity, isLoading } = useRecentActivity();
+  const { data: activity, isLoading, isError } = useRecentActivity();
 
   return (
     <div className="rounded-lg border bg-card shadow-sm">
@@ -15,8 +31,11 @@ export function RecentActivity() {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
-          Loading…
+        <ActivitySkeleton />
+      ) : isError ? (
+        <div className="flex items-center gap-2 px-6 py-12 text-destructive text-sm">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          Failed to load activity. Retrying automatically.
         </div>
       ) : !activity?.length ? (
         <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">

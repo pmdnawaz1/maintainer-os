@@ -39,6 +39,8 @@ class Repository(Base):
 
     issues: Mapped[list["Issue"]] = relationship(back_populates="repository")
     pull_requests: Mapped[list["PullRequest"]] = relationship(back_populates="repository")
+    weekly_reports: Mapped[list["WeeklyReport"]] = relationship(back_populates="repository")
+    releases: Mapped[list["Release"]] = relationship(back_populates="repository")
 
 
 class Issue(Base):
@@ -74,3 +76,34 @@ class PullRequest(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
     repository: Mapped[Repository] = relationship(back_populates="pull_requests")
+
+
+class WeeklyReport(Base):
+    __tablename__ = "weekly_reports"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    repository_id: Mapped[int] = mapped_column(ForeignKey("repositories.id"), index=True)
+    week_start: Mapped[datetime] = mapped_column(DateTime, index=True)
+    week_end: Mapped[datetime] = mapped_column(DateTime)
+    report_json: Mapped[str] = mapped_column(Text)
+    report_markdown: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    repository: Mapped["Repository"] = relationship(back_populates="weekly_reports")
+
+
+class Release(Base):
+    __tablename__ = "releases"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    repository_id: Mapped[int] = mapped_column(ForeignKey("repositories.id"), index=True)
+    version: Mapped[str] = mapped_column(String(50), index=True)
+    previous_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    bump_type: Mapped[str] = mapped_column(String(20))
+    changelog_json: Mapped[str] = mapped_column(Text)
+    changelog_markdown: Mapped[str] = mapped_column(Text)
+    release_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    github_release_id: Mapped[int | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    repository: Mapped["Repository"] = relationship(back_populates="releases")

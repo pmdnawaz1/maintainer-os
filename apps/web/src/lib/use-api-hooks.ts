@@ -6,8 +6,10 @@ import type {
   DashboardStats,
   Issue,
   PullRequest,
+  Release,
   Repository,
   SearchParams,
+  WeeklyReport,
 } from "@maintainer-os/types";
 import { api } from "./api-client";
 
@@ -57,5 +59,27 @@ export function useRecentActivity(limit = 20) {
     queryKey: ["dashboard", "activity", limit],
     queryFn: () => api.get<ActivityItem[]>(`/api/v1/dashboard/activity?limit=${limit}`),
     refetchInterval: 30_000,
+  });
+}
+
+export function useWeeklyReports(repo?: string, limit = 10) {
+  const qs = new URLSearchParams();
+  if (repo) qs.set("repo", repo);
+  qs.set("limit", String(limit));
+
+  return useQuery<WeeklyReport[]>({
+    queryKey: ["reports", "weekly", repo, limit],
+    queryFn: () => api.get<WeeklyReport[]>(`/api/v1/reports/weekly?${qs.toString()}`),
+  });
+}
+
+export function useReleases(repo?: string, limit = 10) {
+  const qs = new URLSearchParams();
+  if (repo) qs.set("repo", repo);
+  qs.set("limit", String(limit));
+
+  return useQuery<Release[]>({
+    queryKey: ["releases", repo, limit],
+    queryFn: () => api.get<Release[]>(`/api/v1/releases/?${qs.toString()}`),
   });
 }
